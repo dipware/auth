@@ -1,0 +1,11 @@
+auth.egg-info/
+**/__pycache__/
+tornado-boilerplate/
+webauthn-rp/
+env/
+dist/
+**/.memory/
+referenceapp.py
+.vscode/
+.pylintrc
+test.py

@@ -1,0 +1,18 @@
+<script>
+    {% include "login.js" %}
+</script>
+<script>
+    {% include "utils.js" %}
+</script>
+
+<h2>Anmeldung</h2>
+<h3>Login</h3>
+<hr /><br />
+
+Username: <input type="text" id="username" />
+<button onclick="authenticate()">Anmeldung</button>
+
+<br /><br />
+<hr />
+
+<span style='color: green;'>STATUS: </span><span id='status'></span>
