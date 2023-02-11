@@ -24,7 +24,7 @@ class AuthenticationHandler(RequestHandler):
         self.write(self.template.render())
         self.finish()
 
-    def post(self, action):
+    async def post(self, action):
         if action not in ('request', 'response'):
             self.send_error(403)
             self.finish()
@@ -40,17 +40,23 @@ class AuthenticationHandler(RequestHandler):
         user_dict = json.loads(Memory.read(Block(f'users/{username}')))
         if user_dict is None:
             return ('User not registered', 400)
-        credentials_block = Block(f'users/{username}/credentials')
-        credentials_list = json.loads(Memory.read(credentials_block))
-        if credentials_list is None:
+        credentials_block = Block(f'users/{username}/credentials/').path.iterdir()
+        credentials_list = []
+        for credentials in credentials_block:
+
+            credentials_list.append(json.loads(Memory.read(Block('/'.join(credentials.parts[1:])))))
+            
+
+        if len(credentials_list) == 0:
             return ('User without credential', 400)
         print(f'found credentials: {credentials_list}')
 
         challenge_bytes = secrets.token_bytes(64)
         challenge = Challenge()
+        challenge.id = 1
         challenge.request = challenge_bytes
         challenge.timestamp_ms = timestamp_ms()
-        challenge.user_id = credentials_list['user']['id']
+        challenge.user_id = user_dict['id']
 
         challenges_block = Block(f'users/{username}/challenges')
         challenges_list = json.loads(Memory.read(challenges_block))

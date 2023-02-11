@@ -15,6 +15,26 @@ async function requestAuthentication() {
     assertion = await navigator.credentials.get(cro);
 }
 
+function parseRequestOptions(opts) {
+    let pOpts = Object.assign({}, opts);
+    if ('challenge' in pOpts.publicKey) {
+        pOpts.publicKey.challenge = base64decode(opts.publicKey.challenge);
+    }
+
+    if ('allowCredentials' in pOpts.publicKey) {
+        let allowCredentials = [];
+        for (let i = 0; i < pOpts.publicKey.allowCredentials.length; i++) {
+            let nCred = Object.assign({}, pOpts.publicKey.allowCredentials[i]);
+            nCred.id = base64decode(opts.publicKey.allowCredentials[i].id);
+            allowCredentials.push(nCred);
+        }
+
+        pOpts.publicKey.allowCredentials = allowCredentials;
+    }
+
+    return pOpts;
+}
+
 async function assertAuthentication() {
     setStatus('Asserting credential for ' + authenticatingUsername);
     let aJSON = assertionJSON(assertion);
