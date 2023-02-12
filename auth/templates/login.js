@@ -42,7 +42,7 @@ async function assertAuthentication() {
     params.append('challengeID', authenticationRequest.challengeID);
     params.append('credential', JSON.stringify(aJSON));
     params.append('username', authenticatingUsername);
-    let response = await post('/login/response/', params);
+    let response = await post('/login/response', params);
     if (response.ok) {
         setStatus(
             'Successfully authorized username ' + authenticatingUsername + '!');
@@ -50,6 +50,26 @@ async function assertAuthentication() {
         setStatus(
             'Failed to authorize username ' + authenticatingUsername + '...');
     }
+}
+
+function assertionJSON(cred) {
+    let credJSON = {};
+    credJSON.type = cred.type;
+    credJSON.id = cred.id;
+    credJSON.rawId = base64encode(cred.rawId);
+    credJSON.response = {
+        authenticatorData: base64encode(cred.response.authenticatorData),
+        clientDataJSON: base64encode(cred.response.clientDataJSON),
+        signature: base64encode(cred.response.signature),
+    }
+
+    if ('userHandle' in cred.response && cred.response.userHandle != null) {
+        if (cred.response.userHandle.byteLength > 0) {
+            credJSON.response.userHandle = base64encode(cred.response.userHandle);
+        }
+    }
+
+    return credJSON;
 }
 
 async function authenticate() {

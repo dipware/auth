@@ -1,12 +1,12 @@
 import secrets
 from jinja2 import Template
 from tornado.web import RequestHandler
-from webauthn_rp.types import PublicKeyCredentialType
+from webauthn_rp.types import AuthenticatorAssertionResponse, PublicKeyCredentialType
 from webauthn_rp.types import PublicKeyCredentialDescriptor
-from webauthn_rp.types import PublicKeyCredentialUserEntity, AuthenticatorAttestationResponse
+from webauthn_rp.types import PublicKeyCredentialUserEntity
 from webauthn_rp.converters import jsonify
 from webauthn_rp.parsers import parse_public_key_credential
-from dipdb import Memory, Block
+from dipdb import Memory, Block, Find
 from auth.models.user import Challenge, Credential, User
 from auth import config as CONFIG
 from ..utils import timestamp_ms
@@ -30,11 +30,11 @@ class AuthenticationHandler(RequestHandler):
             self.finish()
             return
         if action == 'request':
-            self._authorisation_request()
+            self._login_request()
         else:
-            self._authorisation_response()
+            self._login_response()
 
-    def _authorisation_request(self):
+    def _login_request(self):
         username = self.get_body_argument('username')
 
         user_dict = json.loads(Memory.read(Block(f'users/{username}')))
@@ -46,7 +46,6 @@ class AuthenticationHandler(RequestHandler):
 
             credentials_list.append(json.loads(Memory.read(Block('/'.join(credentials.parts[1:])))))
             
-
         if len(credentials_list) == 0:
             return ('User without credential', 400)
         print(f'found credentials: {credentials_list}')
@@ -63,13 +62,21 @@ class AuthenticationHandler(RequestHandler):
         challenges_list.append(challenge)
         Memory.update(challenges_block, json.dumps(jsonify(challenges_list)))
 
+        # credentials_list_send = []
+        # for credential in credentials_list:
+        #     cred = Credential()
+        #     cred.id = credential['id']
+        #     cred.credential_public_key = credential['credentialPublicKey']
+        #     cred.signature_count = credential['signatureCount']
+        #     cred.user_id = user_dict['id']
+        #     credentials_list_send.append()
         options = CONFIG.APP_CRO_BUILDER.build(
             challenge=challenge_bytes,
             allow_credentials=[
                 PublicKeyCredentialDescriptor(
-                    id=credential_model,
+                    id=credential['id'],
                     type=PublicKeyCredentialType.PUBLIC_KEY,
-                ) for credential_model in credentials_list
+                ) for credential in credentials_list
             ])
 
         options_json = jsonify(options)
@@ -84,23 +91,31 @@ class AuthenticationHandler(RequestHandler):
 
         # return (response_json_string, 200, {'Content-Type': 'application/json'})
 
-    def _authorisation_response(self):
+    def _login_response(self):
         try:
-            challengeID = request.form['challengeID']
+            challengeID = self.get_body_argument('challengeID')
             credential = parse_public_key_credential(
-                json.loads(request.form['credential']))
-            username = request.form['username']
+                json.loads(self.get_body_argument('credential')))
+            username = self.get_body_argument('username')
         except Exception:
             return ('Could not parse input data', 400)
 
         if type(credential.response) is not AuthenticatorAssertionResponse:
             return ('Invalid response type', 400)
 
-        challenge_model = Challenge.query.filter_by(id=challengeID).first()
-        if not challenge_model:
+        challenge_model = None
+        challenges_list = json.loads(Find.read(Block(f'users/{username}/challenges')))
+        for challenge in challenges_list:
+            if challenge['id'] == challengeID:
+                challenge_model = Challenge()
+                challenge_model.id = int(challenge['id'])
+                challenge_model.request = challenge['request']
+                challenge_model.timestamp_ms = int(challenge['timestampMs'])
+                challenge_model.user_id = int(challenge['userId'])
+        if challenge_model == None:
             return ('Could not find challenge matching given id', 400)
 
-        user_model = User.query.filter_by(username=username).first()
+        user_model = json.loads(Find.read(Block(f'users/{username}')))
         if not user_model:
             return ('Invalid username', 400)
 
@@ -109,7 +124,7 @@ class AuthenticationHandler(RequestHandler):
             return ('Timeout', 408)
 
         user_entity = PublicKeyCredentialUserEntity(name=username,
-                                                    id=user_model.user_handle,
+                                                    id=user_model['userHandle'],
                                                     display_name=username)
 
         try:
